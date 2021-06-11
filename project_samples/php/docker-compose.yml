@@ -1,0 +1,46 @@
+version: "3.2"
+services:
+  nginx:
+    image: nginx:1.17.1-alpine
+    build:
+      context: ./
+      dockerfile: Dockerfile.nginx
+    expose:
+      - 80
+    volumes:
+      - ./src/:/app/
+      - ./site.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      # For communication between php and nginx
+      - internal
+      # Add this network so the application is accessible as https://php-app.vcap.me from the host system
+      - traefik
+    labels:
+      - traefik.backend=project1-nginx
+      - traefik.frontend.rule=Host:php-app.vcap.me
+      - traefik.docker.network=traefik
+      - traefik.port=80
+
+  php:
+    build:
+      context: ./
+      dockerfile: Dockerfile.php
+    expose:
+      - 9000
+    volumes:
+      - ./src/:/app/
+    networks:
+      # For communication between php and nginx
+      - internal
+      # Add this network if you want to use postgres, it will be accessible on postgres:5432
+      - postgres
+      # Add this network if you want to use smtp, it will be accessible on smtp:25
+      - mail
+    labels:
+      - traefik.enable=false
+
+networks:
+  traefik:
+    external: true
+  internal:
+    external: false

@@ -1,0 +1,121 @@
+version: "2.2"
+
+services:
+  # HTTP proxy
+  traefik:
+    image: traefik:alpine
+    restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "1"
+        max-size: 1m
+    # Enable debug
+    #command: --web --docker --logLevel=DEBUG
+    ports:
+      - 80:80
+      - 443:443
+      # Dashboard
+      - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik.toml:/traefik.toml
+      - ./acme.json:/acme.json
+    labels:
+      # Dashboard
+      - 'traefik.frontend.rule=Host:monitor.vcap.me'
+      - 'traefik.port=8080'
+    networks:
+      - traefik
+
+  # Portainer - WebUI for Containers
+  portainer:
+    image: portainer/portainer
+    container_name: portainer
+    restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "1"
+        max-size: 1m
+    command: -H unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+      - portainer-shared:/shared
+    environment:
+      - TZ=${TZ}
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.backend=portainer"
+      - "traefik.frontend.rule=Host:portainer.vcap.me"
+      - "traefik.port=9000"
+      - "traefik.docker.network=traefik"
+      - "traefik.frontend.headers.STSSeconds=315360000"
+      - "traefik.frontend.headers.browserXSSFilter=true"
+      - "traefik.frontend.headers.contentTypeNosniff=true"
+      - "traefik.frontend.headers.forceSTSHeader=true"
+      - "traefik.frontend.headers.SSLHost=portainer.vcap.me"
+      - "traefik.frontend.headers.STSIncludeSubdomains=true"
+      - "traefik.frontend.headers.STSPreload=true"
+      - "traefik.frontend.headers.frameDeny=true"
+
+  smtp:
+    image: mailhog/mailhog
+    restart: "no"
+    command: ["-smtp-bind-addr", "0.0.0.0:25"]
+    user: root
+    healthcheck:
+      test: ["CMD", "echo | telnet 127.0.0.1 8025"]
+      interval: 1m30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "none"
+    networks:
+      - traefik
+      - mail
+    expose:
+      - 25
+    labels:
+      - "traefik.enable=true"
+      - "traefik.backend=mailhog"
+      - "traefik.frontend.rule=Host:mail.vcap.me"
+      - "traefik.port=8025"
+      - "traefik.docker.network=traefik"
+
+  # Monitor docker infrastructure in newrelic
+  newrelic-infrastructure:
+    image: newrelic/infrastructure:latest
+    restart: "no"
+    cap_add:
+      - SYS_PTRACE
+    network_mode: host
+    pid: host
+    privileged: true
+    volumes:
+      - "/:/host:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      NRIA_LICENSE_KEY: ${NEWRELIC_LICENCE_KEY}
+
+  # Shared nerwelic daemon for all projects
+  newrelic-php:
+    image: newrelic/php-daemon
+    restart: "no"
+    networks:
+      - newrelic
+
+volumes:
+  portainer-data:
+  portainer-shared:
+
+networks:
+  traefik:
+    external: true
+  newrelic:
+    external: true
+  mail:
+    external: true

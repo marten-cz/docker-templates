@@ -1,0 +1,25 @@
+version: "3.7"
+services:
+  postgres:
+    image: postgis/postgis:${TAG}
+    container_name: postgres_master
+    restart: always
+    expose:
+      - 5432
+    volumes:
+      - pg_data_master:/var/lib/postgresql/data
+      - pg_backup_master:/var/lib/postgresql/backups
+    environment:
+      - POSTGRES_PASSWORD=${POSTRES_PASSWORD}
+    networks:
+      - postgres
+    labels:
+      - traefik.enable=false
+
+volumes:
+  pg_data_master:
+  pg_backup_master:
+
+networks:
+  postgres:
+    external: true

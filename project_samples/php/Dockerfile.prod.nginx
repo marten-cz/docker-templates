@@ -1,0 +1,8 @@
+FROM nginx:1.17.1-alpine
+
+WORKDIR /app/
+
+
+COPY ./install/nginx/prod.conf /etc/nginx/conf.d/site.conf
+
+COPY ./src /app/
